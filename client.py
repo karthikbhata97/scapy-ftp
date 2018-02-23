@@ -1,3 +1,11 @@
+#! /usr/bin/python2.7
+
+'''
+usage: sudo python2.7 client.py [ftp-server-ip]
+
+username and password is currently hardcoded
+'''
+
 from scapy.all import *
 from random import randint
 import sys
@@ -6,9 +14,9 @@ import sys
 
 class FTPClinet:
 
-	def __init__(self, src, dst):
+	def __init__(self, dst):
 		self.sport = random.randint(1024, 65535)
-		self.src = src
+		# self.src = src
 		self.dst = dst
 		self.next_seq = 1000
 		self.next_ack = 0
@@ -110,7 +118,7 @@ class FTPClinet:
 		# self.send_ack(resp)
 		self.send_pkt(resp)
 
-h = FTPClinet(sys.argv[1], sys.argv[2])
+h = FTPClinet(sys.argv[1])
 h.handshake()
 h.get_file("anonymous", "", "testfile")
 h.close()
