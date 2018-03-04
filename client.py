@@ -12,6 +12,8 @@ from threading import Thread
 from time import sleep
 import sys
 
+verbose = False
+
 class FTPPassive:
 	def __init__(self, dst, dport):
 		self.sport = random.randint(1024, 65535)
@@ -31,6 +33,7 @@ class FTPPassive:
 			'TCP_ECE': 0x40, 
 			'TCP_CWR': 0x80
 		}
+		self.verbose = False
 
 
 	def send_syn(self):
@@ -38,7 +41,7 @@ class FTPPassive:
 		ip = IP(dst=self.dst)
 		syn = TCP(sport=self.sport, dport=self.dport, flags='S', seq=self.next_seq, ack=self.next_ack)
 		while not synack:
-			synack = sr1(ip/syn, timeout=1)
+			synack = sr1(ip/syn, timeout=1, verbose=self.verbose)
 
 		self.next_seq = synack[TCP].ack
 		return synack
@@ -48,7 +51,7 @@ class FTPPassive:
 		ip = IP(dst=self.dst)
 		self.next_ack = pkt[TCP].seq + self.get_next_ack(pkt)
 		ack = TCP(sport=self.sport, dport=self.dport, flags='A', seq=self.next_seq, ack=self.next_ack)
-		send(ip/ack)
+		send(ip/ack, verbose=self.verbose)
 
 	def get_next_ack(self, pkt):
 		total_len = pkt.getlayer(IP).len
@@ -61,15 +64,16 @@ class FTPPassive:
 		synack = self.send_syn()
 		self.src = synack[IP].src
 		self.send_ack(synack)
-		print "sniff called"
-		sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
-		print "Handshake complete"
+		s_pkt = sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
 
 	def sniff_filter(self, pkt):
 		return pkt.haslayer(IP) and pkt[IP].src==self.dst and pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and pkt[TCP].sport == self.dport
 
 	def manage_resp(self, pkt):
-		print pkt.show()
+		if Raw in pkt:
+			print pkt[Raw].load
+
+		# print pkt.show()
 		self.next_seq = pkt[TCP].ack
 		if (pkt[TCP].flags == 16L):
 			pass
@@ -77,17 +81,14 @@ class FTPPassive:
 			self.send_ack(pkt)
 		elif (pkt[TCP].flags & self.tcp_flags['TCP_ACK']):
 			self.send_ack(pkt)
-		elif Raw in pkt:
-			print pkt[Raw]
-			send_ack(pkt)
 		else:
 			print 'Unknown'
 			print pkt.show()
-			send_ack(pkt)
+			self.send_ack(pkt)
 
 	def run(self):
 		self.handshake()
-		sniff(lfilter=self.sniff_filter, prn=self.manage_resp, stop_filter=self.finish)
+		s_pkt = sniff(lfilter=self.sniff_filter, prn=self.manage_resp, stop_filter=self.finish)
 		return
 
 	def finish(self, pkt):
@@ -99,8 +100,8 @@ class FTPPassive:
 		
 	def send_pkt(self, pkt=None):
 		if pkt:
-			send(pkt)
-		sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
+			send(pkt, verbose=self.verbose)
+		s_pkt = sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
 		self.close()
 		return
 
@@ -110,9 +111,9 @@ class FTPPassive:
 		pkt[TCP].flags = 'FA'
 		pkt[TCP].seq = self.next_seq
 		pkt[TCP].ack = self.next_ack
-		print pkt.show()
+		# print pkt.show()
 		while not resp:
-			resp = sr1(pkt, timeout=4)
+			resp = sr1(pkt, timeout=4, verbose=self.verbose)
 		# self.send_ack(resp)
 		self.send_pkt(resp)
 
@@ -140,13 +141,14 @@ class FTPClinet:
 		}
 
 		self.passive_port = None
+		self.verbose = False
 
 	def send_syn(self):
 		synack = None
 		ip = IP(dst=self.dst)
 		syn = TCP(sport=self.sport, dport=self.dport, flags='S', seq=self.next_seq, ack=self.next_ack)
 		while not synack:
-			synack = sr1(ip/syn, timeout=1)
+			synack = sr1(ip/syn, timeout=1, verbose=self.verbose)
 
 		self.next_seq = synack[TCP].ack
 		return synack
@@ -156,7 +158,7 @@ class FTPClinet:
 		ip = IP(dst=self.dst)
 		self.next_ack = pkt[TCP].seq + self.get_next_ack(pkt)
 		ack = TCP(sport=self.sport, dport=self.dport, flags='A', seq=self.next_seq, ack=self.next_ack)
-		send(ip/ack)
+		send(ip/ack, verbose=self.verbose)
 
 	def get_next_ack(self, pkt):
 		total_len = pkt.getlayer(IP).len
@@ -169,9 +171,7 @@ class FTPClinet:
 		synack = self.send_syn()
 		self.src = synack[IP].src
 		self.send_ack(synack)
-		print "sniff called"
-		sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
-		print "Handshake complete"
+		s_pkt = sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
 
 
 	def login(self, user, passwd):
@@ -196,7 +196,10 @@ class FTPClinet:
 		return pkt.haslayer(IP) and pkt[IP].src==self.dst and pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and pkt[TCP].sport == self.dport
 
 	def manage_resp(self, pkt):
-		print pkt.show()
+		if Raw in pkt:
+			print pkt[Raw].load
+
+		# print pkt.show()
 		self.next_seq = pkt[TCP].ack
 		if (pkt[TCP].flags == self.tcp_flags['TCP_ACK']):
 			pass
@@ -207,18 +210,15 @@ class FTPClinet:
 			self.send_ack(pkt)
 		elif (pkt[TCP].flags & self.tcp_flags['TCP_ACK']):
 			self.send_ack(pkt)
-		elif Raw in pkt:
-			print pkt[Raw]
-			send_ack(pkt)
 		else:
 			print 'Unknown'
 			print pkt.show()
-			send_ack(pkt)
+			self.send_ack(pkt)
 
 	def send_pkt(self, pkt=None):
 		if pkt:
-			send(pkt)
-		sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
+			send(pkt, verbose=self.verbose)
+		s_pkt = sniff(timeout=4, lfilter=self.sniff_filter, prn=self.manage_resp)
 		return
 
 	def close(self):
@@ -227,9 +227,9 @@ class FTPClinet:
 		pkt[TCP].flags = 'FA'
 		pkt[TCP].seq = self.next_seq
 		pkt[TCP].ack = self.next_ack
-		print pkt.show()
+		# print pkt.show()
 		while not resp:
-			resp = sr1(pkt, timeout=4)
+			resp = sr1(pkt, timeout=4, verbose=self.verbose)
 		# self.send_ack(resp)
 		self.send_pkt(resp)
 
@@ -263,15 +263,11 @@ class FTPClinet:
 		cmd = "PASV\r\n"
 		pasv = pkt/cmd
 		self.send_pkt(pasv)
-		print self.passive_port
+		# print self.passive_port
 
 	def manage_passive(self):
-		print "Check Check: %d" % self.passive_port
 		passive = FTPPassive(self.dst, self.passive_port)
 		passive.run()
-		print "\n" * 10
-		print "Success\t" * 100
-		print "\n" * 5
 		return
 
 
