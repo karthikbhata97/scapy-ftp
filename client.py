@@ -12,7 +12,7 @@ from threading import Thread
 from time import sleep
 import sys
 
-verbose = False
+cmd_passive = ['LIST', 'RETR']
 
 class FTPPassive:
 	def __init__(self, dst, dport):
@@ -240,18 +240,29 @@ class FTPClinet:
 			command = raw_input() + '\r\n'
 			if command == 'exit\r\n':
 				break
-			self.passive()
-			pkt = self.basic_pkt
-			pkt[TCP].flags = 'AP'
-			pkt[TCP].seq = self.next_seq
-			pkt[TCP].ack = self.next_ack
-			cmd = pkt/command
-			passive_thread = Thread(target = self.manage_passive)
-			passive_thread.start()
-			sleep(4)
-			self.send_pkt(cmd)
-			passive_thread.join()
-			self.send_pkt()
+			base_cmd = command.split('\r')[0].split(' ')[0]
+			if base_cmd in cmd_passive:
+				self.passive()
+				pkt = self.basic_pkt
+				pkt[TCP].flags = 'AP'
+				pkt[TCP].seq = self.next_seq
+				pkt[TCP].ack = self.next_ack
+				cmd = pkt/command
+				passive_thread = Thread(target = self.manage_passive)
+				passive_thread.start()
+				sleep(4)
+				self.send_pkt(cmd)
+				passive_thread.join()
+				self.send_pkt()
+			else:
+				# No passive
+				pkt = self.basic_pkt
+				pkt[TCP].flags = 'AP'
+				pkt[TCP].seq = self.next_seq
+				pkt[TCP].ack = self.next_ack
+				cmd = pkt/command
+				self.send_pkt(cmd)
+
 
 		self.close()
 
@@ -273,6 +284,6 @@ class FTPClinet:
 
 h = FTPClinet(sys.argv[1])
 h.handshake()
-h.login("anonymous", "")
+h.login("testftp", "testftp")
 h.interactive()
 
