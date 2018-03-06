@@ -5,7 +5,8 @@ from threading import Thread
 from time import sleep
 import sys
 
-cmd_passive = ['LIST', 'RETR']
+cmd_passive = ['LIST', 'RETR', 'STOR']
+cmd_sender = ['STOR']
 
 class FTPListener:
 	def __init__(self, sport, dport, dst):
@@ -126,6 +127,26 @@ class FTPPassive:
 		pkt[TCP].ack = self.listener.next_ack
 		sr1(pkt, verbose=self.verbose)
 
+	def send_pkt(self, pkt):
+		seq_next = self.listener.next_seq 
+		while self.listener.next_seq == seq_next:
+			send(pkt, verbose=self.verbose)
+			sleep(1)
+		return
+
+
+	def sendfile(self, file):
+		with open(file, "r") as f:
+			data = f.read()
+			chunks = [data[i:i+512] for i in range(0, len(data), 512)]
+		for item in chunks:
+			pkt = self.basic_pkt
+			pkt[TCP].flags = 'AP'
+			pkt[TCP].seq = self.listener.next_seq
+			pkt[TCP].ack = self.listener.next_ack
+			pkt = pkt/Raw(load=item)
+			self.send_pkt(pkt)
+
 
 class FTPClient:
 	def __init__(self, dst):
@@ -188,9 +209,13 @@ class FTPClient:
 		self.send_pkt(pasv)
 		self.passive_port = self.listener.get_passive_port()
 
-	def manage_passive(self):
+	def manage_passive(self, command):
 		passive = FTPPassive(self.dst, self.passive_port)
 		passive.handshake()
+		base_cmd = command.split('\r\n')[0]
+		cmd = base_cmd.split(' ')[0]
+		if cmd == 'STOR':
+			passive.sendfile(base_cmd.split(' ')[1])
 		return passive
 
 	def close(self):
@@ -212,7 +237,7 @@ class FTPClient:
 			base_cmd = command.split('\r')[0].split(' ')[0]
 			if base_cmd in cmd_passive:
 				self.passive()
-				self.passive_obj = self.manage_passive() 
+				self.passive_obj = self.manage_passive(command) 
 				pkt = self.basic_pkt
 				pkt[TCP].flags = 'AP'
 				pkt[TCP].seq = self.listener.next_seq
