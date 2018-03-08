@@ -223,37 +223,45 @@ class FTPClient:
 		pkt[TCP].flags = 'FA'
 		pkt[TCP].seq = self.listener.next_seq
 		pkt[TCP].ack = self.listener.next_ack
-		sr1(pkt, verbose=self.verbose)
+		send(pkt, verbose=self.verbose)
 		self.listen_thread.join()
+
+	def run_command(self, command):
+		if command == 'exit\r\n':
+			self.close()
+			return
+		base_cmd = command.split('\r')[0].split(' ')[0]
+		if base_cmd in cmd_passive:
+			self.passive()
+			self.passive_obj = self.manage_passive(command) 
+			pkt = self.basic_pkt
+			pkt[TCP].flags = 'AP'
+			pkt[TCP].seq = self.listener.next_seq
+			pkt[TCP].ack = self.listener.next_ack
+			cmd = pkt/command
+			self.send_pkt(cmd)
+			self.passive_obj.close()
+		else:
+			pkt = self.basic_pkt
+			pkt[TCP].flags = 'AP'
+			pkt[TCP].seq = self.listener.next_seq
+			pkt[TCP].ack = self.listener.next_ack
+			cmd = pkt/command
+			self.send_pkt(cmd)
 
 	def interactive(self):
 		command = ""
 		while True:
-			sys.stdout.write("\n>> ")
+			sys.stdout.write(">> ")
 			command = raw_input() + '\r\n'
 			if command == 'exit\r\n':
 				self.close()
 				return
-			base_cmd = command.split('\r')[0].split(' ')[0]
-			if base_cmd in cmd_passive:
-				self.passive()
-				self.passive_obj = self.manage_passive(command) 
-				pkt = self.basic_pkt
-				pkt[TCP].flags = 'AP'
-				pkt[TCP].seq = self.listener.next_seq
-				pkt[TCP].ack = self.listener.next_ack
-				cmd = pkt/command
-				self.send_pkt(cmd)
-				self.passive_obj.close()
 			else:
-				pkt = self.basic_pkt
-				pkt[TCP].flags = 'AP'
-				pkt[TCP].seq = self.listener.next_seq
-				pkt[TCP].ack = self.listener.next_ack
-				cmd = pkt/command
-				self.send_pkt(cmd)
-
+				self.run_command(command)
 
 client = FTPClient(sys.argv[1])
 client.handshake()
+client.run_command('USER ' + sys.argv[2] + '\r\n')
+client.run_command('PASS ' + sys.argv[3] + '\r\n')
 client.interactive()
