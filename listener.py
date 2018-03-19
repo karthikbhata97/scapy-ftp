@@ -4,6 +4,7 @@ from random import randint
 from threading import Thread
 from time import sleep
 import sys
+from Queue import Queue
 
 cmd_passive = ['LIST', 'RETR', 'STOR']
 cmd_sender = ['STOR']
@@ -28,6 +29,7 @@ class FTPListener:
 		}
 		self.verbose = False
 		self.passive_port = None
+		self.data_share = Queue([50000]) 
 
 	def sniff_filter(self, pkt):
 		return pkt.haslayer(IP) and pkt[IP].src==self.dst and (not self.src or pkt[IP].dst == self.src) and pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and pkt[TCP].sport == self.dport
@@ -35,6 +37,7 @@ class FTPListener:
 	def manage_resp(self, pkt):
 		if Raw in pkt:
 			print pkt[Raw].load
+			self.data_share.put(pkt[Raw].load)
 
 		if Raw in pkt and pkt[Raw].load[0:3] == '227':
 			ip_port = pkt[Raw].load.split('(')[1].split(')')[0].split(',')
@@ -134,6 +137,13 @@ class FTPPassive:
 			sleep(1)
 		return
 
+	def recvfile(self, file):
+		with open(file, "w") as f:
+			while True:
+				if not self.listener.data_share.empty():
+					f.write(self.listener.data_share.get())
+				if self.listener.data_share.empty() and not self.listen_thread.isAlive():
+					break
 
 	def sendfile(self, file):
 		with open(file, "r") as f:
@@ -216,6 +226,9 @@ class FTPClient:
 		cmd = base_cmd.split(' ')[0]
 		if cmd == 'STOR':
 			passive.sendfile(base_cmd.split(' ')[1])
+		if cmd == 'RETR':
+			recv_thread = Thread(target=passive.recvfile, args=(base_cmd.split(' ')[1], ))
+			recv_thread.start()
 		return passive
 
 	def close(self):
