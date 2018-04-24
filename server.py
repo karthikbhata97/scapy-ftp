@@ -1,3 +1,6 @@
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+
 from scapy.all import *
 from random import randint
 from threading import Thread
@@ -5,12 +8,82 @@ from time import sleep
 import sys
 import commands
 from os import path
+from Queue import Queue
+
+
+
+class FTPListener:
+	def __init__(self, src, dst, sport, dport, seqno, ackno):
+		self.src = src
+		self.dst = dst
+		self.sport = sport
+		self.dport = dport
+		self.data_share = Queue([100])
+		self.next_seq = seqno
+		self.next_ack = ackno
+		self.tcp_flags = {
+			'TCP_FIN': 0x01, 
+			'TCP_SYN': 0x02, 
+			'TCP_RST': 0x04, 
+			'TCP_PSH': 0x08, 
+			'TCP_ACK': 0x10, 
+			'TCP_URG': 0x20, 
+			'TCP_ECE': 0x40, 
+			'TCP_CWR': 0x80
+		}
+		self.basic_pkt = IP(src=self.src, dst=self.dst)/TCP(sport=self.sport, dport=self.dport)
+		self.verbose = False
+
+	def get_next_ack(self, pkt):
+		total_len = pkt.getlayer(IP).len
+		ip_hdr_len = pkt.getlayer(IP).ihl * 32 / 8
+		tcp_hdr_len = pkt.getlayer(TCP).dataofs * 32 / 8
+		ans = total_len - ip_hdr_len - tcp_hdr_len
+		return (ans if ans else 1)
+
+	def send_ack(self, pkt):
+		self.next_ack = pkt[TCP].seq + self.get_next_ack(pkt)
+		ack = TCP(sport=self.sport, dport=self.dport, flags='A', seq=self.next_seq, ack=self.next_ack)
+		send(self.basic_pkt/ack, verbose=self.verbose)
+
+	def sniff_filter(self, pkt):
+		if pkt.haslayer(IP) and pkt[IP].src == self.dst and pkt[IP].dst == self.src \
+			and pkt.haslayer(TCP) and pkt[TCP].sport == self.dport and pkt[TCP].dport == self.sport:
+			return True
+		return False
+
+	def finish(self, pkt):
+		if pkt.haslayer(TCP) and (pkt[TCP].flags & self.tcp_flags['TCP_FIN']):
+			self.next_seq = pkt[TCP].ack
+			self.send_ack(pkt)
+			# need FIN?
+			return True
+		return False
+
+	def manage_resp(self, pkt):
+		if pkt[TCP].flags & self.tcp_flags['TCP_ACK']:
+			self.next_seq = pkt[TCP].ack
+		if not pkt[TCP].flags == self.tcp_flags['TCP_ACK']:
+			self.send_ack(pkt)
+		if pkt[TCP].flags & self.tcp_flags['TCP_FIN']:
+			fin = self.basic_pkt
+			fin[TCP].flags = 'F'
+			send(fin, verbose=self.verbose)
+
+		if Raw in pkt:
+			self.data_share.put(pkt[Raw].load)
+		# manage ack
+
+	def run(self):
+		sniff(prn=self.manage_resp, lfilter=self.sniff_filter, stop_filter=self.finish)
 
 class FTPServerConnectiton:
 
 	__dirname = path.abspath(".")
 	__currdir = __dirname
 	__pasv = False
+	__finish = False
+
 
 	__resp = {
 	    'welcome': '220 Welcome!\r\n',
@@ -40,8 +113,6 @@ class FTPServerConnectiton:
 		self.dst = dst
 		self.sport = sport
 		self.dport = dport
-		self.next_seq = seqno
-		self.next_ack = ackno
 		self.tcp_flags = {
 			'TCP_FIN': 0x01, 
 			'TCP_SYN': 0x02, 
@@ -53,38 +124,64 @@ class FTPServerConnectiton:
 			'TCP_CWR': 0x80
 		}
 		self.basic_pkt = IP(src=self.src, dst=self.dst)/TCP(sport=self.sport, dport=self.dport)
+		self.verbose = False
+		self.listener = FTPListener(src, dst, sport, dport, seqno, ackno)
+		self.listener_thread = Thread(target=self.listener.run)
+		self.listener_thread.start()
 
-	def send_ack(self, pkt):
-		self.next_ack = pkt[TCP].seq + self.get_next_ack(pkt)
-		ack = TCP(sport=self.sport, dport=self.dport, flags='A', seq=self.next_seq, ack=self.next_ack)
-		send(basic_pkt/ack, verbose=self.verbose)
+	def command(self, cmd):
+		print 'command %s recieved' % (cmd,)
 
-	def manage_resp(self, pkt):
-		if not pkt[TCP].flags == self.tcp_flags['TCP_ACK']:
-			self.send_ack(pkt)
-		# manage ack
+		def default_resp(cmd):
+			self.send_data('Not yet implemented or Invalid query\r\n')
+
+		action = getattr(self, cmd.split(' ')[0], default_resp)
+		action(cmd)
+
+	def USER(self, cmd):
+		try:
+			self.user = cmd.split(' ')[1]
+		except:
+			self.send_data(self.__resp['cmd_error'])
+			return
+		self.send_data(self.__resp['username_ok'])
+
+	def PASS(self, cmd):
+		try:
+			self.passwd = cmd.split(' ')[1]
+		except:
+			self.send_data(self.__resp['cmd_error'])
+			return
+		self.send_data(self.__resp['password_ok'])
 
 
-	def sniff_filter(self, pkt):
-		if pkt.haslayer(IP) and pkt[IP].src == self.dst and pkt[IP].dst == self.src \
-			and pkt.haslayer(TCP) and pkt[TCP].sport == self.dport and pkt[TCP].dport == self.sport:
-			return True
-		return False
+	def SYST(self, cmd):
+		self.send_data(self.__resp['syst_msg'])
 
-	def finish(self, pkt):
-		if pkt.haslayer(TCP) and (pkt[TCP].flags & self.tcp_flags['TCP_FIN']):
-			self.next_seq = pkt[TCP].ack
-			self.send_ack(pkt)
-			# need FIN?
-			return True
-		return False
+	def send_data(self, data):
+		pkt = self.basic_pkt/Raw(load=data)
+		self.send_pkt(pkt)
+
+	def send_pkt(self, pkt):
+		pkt[TCP].flags = 'PA'
+		pkt[TCP].seq = self.listener.next_seq
+		pkt[TCP].ack = self.listener.next_ack
+		while self.listener.next_seq == pkt[TCP].seq:
+			sr1(pkt, timeout=1, verbose=self.verbose)
 
 	def run(self):
-		sniff(prn=self.manage_resp, lfilter=self.sniff_filter, stop_filter=self.finish)
+		self.send_data(self.__resp['welcome'])
+		while not self.__finish:
+			if not self.listener.data_share.empty():
+				cmd = self.listener.data_share.get().strip()
+				self.command(cmd)
+
+
 
 class FTPServer:
 	def __init__(self, sport):
 		self.sport = sport
+		self.verbose = False
 		self.tcp_flags = {
 			'TCP_FIN': 0x01, 
 			'TCP_SYN': 0x02, 
@@ -97,19 +194,21 @@ class FTPServer:
 		}
 
 	def handshake(self, pkt):
+		pkt.summary()
 		dst = pkt[IP].src
 		src = pkt[IP].dst
-		dport = pkt[TCP].dport
+		dport = pkt[TCP].sport
 		ackno = pkt[TCP].seq + 1
-		seqno = 1000 # use random
+		seqno = 0 # use random
 		synack = IP(src=src, dst=dst)/TCP(sport=self.sport, dport=dport, flags='SA', seq=seqno, ack=ackno)
 		reply = None
 		while not reply:
-			reply = sr1(synack, timeout=1)
+			reply = sr1(synack, timeout=1, verbose=self.verbose)
 		seqno += 1
 		serv = FTPServerConnectiton(src, dst, self.sport, dport, seqno, ackno)
 		serv_thread = Thread(target=serv.run)
 		serv_thread.start()
+		print 'New connection created'
 
 	def sniff_filter(self, pkt):
 		return pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and pkt[TCP].flags == self.tcp_flags['TCP_SYN'] 
@@ -118,3 +217,7 @@ class FTPServer:
 	def run(self):
 		sniff(prn=self.handshake, lfilter=self.sniff_filter)
 
+
+if __name__ == '__main__':
+	server = FTPServer(int(sys.argv[1]))
+	server.run()

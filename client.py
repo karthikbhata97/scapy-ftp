@@ -1,3 +1,5 @@
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 from scapy.all import *
 from random import randint
@@ -5,6 +7,7 @@ from threading import Thread
 from time import sleep
 import sys
 from Queue import Queue
+
 
 cmd_passive = ['LIST', 'RETR', 'STOR']
 cmd_sender = ['STOR']
@@ -159,9 +162,9 @@ class FTPPassive:
 
 
 class FTPClient:
-	def __init__(self, dst):
+	def __init__(self, dst, dport):
 		self.sport = random.randint(1024, 65535)
-		self.dport = 21
+		self.dport = dport
 		self.src = None
 		self.dst = dst
 		self.basic_pkt = IP(dst=self.dst)/TCP(sport=self.sport, dport=self.dport)
@@ -273,8 +276,20 @@ class FTPClient:
 			else:
 				self.run_command(command)
 
-client = FTPClient(sys.argv[1])
-client.handshake()
-client.run_command('USER ' + sys.argv[2] + '\r\n')
-client.run_command('PASS ' + sys.argv[3] + '\r\n')
-client.interactive()
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-6', '--ipv6', help='User FTP on IPv6 network', action='store_true')
+	parser.add_argument('-u', '--user', help='Username for FTP login', nargs=1, type=str, required=True)
+	parser.add_argument('-l', '--passwd', help='Password for FTP login', nargs=1, type=str, required=True)
+	parser.add_argument('-i', '--ipaddr', help='FTP server IP address', nargs=1, type=str, required=True)
+	parser.add_argument('-p', '--port', help='Port address of FTP server', nargs=1, type=int, required=True)
+	args = parser.parse_args()
+
+	if args.ipv6:
+		IP = IPv6
+
+	client = FTPClient(args.ipaddr[0], args.port[0])
+	client.handshake()
+	client.run_command('USER ' + args.user[0] + '\r\n')
+	client.run_command('PASS ' + args.passwd[0] + '\r\n')
+	client.interactive()
