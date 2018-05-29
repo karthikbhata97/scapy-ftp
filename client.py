@@ -16,7 +16,7 @@ class FTPListener:
 	'''	
 		Initializes fields
 	'''
-	def __init__(self, sport, dport, dst):
+	def __init__(self, sport, dport, dst, interact=True):
 		self.sport = sport
 		self.dport = dport
 		self.src = None
@@ -35,7 +35,8 @@ class FTPListener:
 		}
 		self.verbose = False
 		self.passive_port = None
-		self.data_share = Queue([50000]) 
+		self.data_share = Queue([50000])
+		self.interact = interact 
 
 	'''
 		sniff_filter: filters packet based on port it is listening on
@@ -48,7 +49,8 @@ class FTPListener:
 	'''
 	def manage_resp(self, pkt):
 		if Raw in pkt:
-			print pkt[Raw].load
+			if self.interact:
+				print pkt[Raw].load
 			self.data_share.put(pkt[Raw].load)
 
 		if Raw in pkt and pkt[Raw].load[0:3] == '227':
@@ -112,7 +114,7 @@ class FTPPassive:
 	'''	
 		Initializes fields
 	'''
-	def __init__(self, dst, dport):
+	def __init__(self, dst, dport, interact=True):
 		self.sport = random.randint(1024, 65535)
 		self.dport = dport
 		self.src = None
@@ -129,7 +131,8 @@ class FTPPassive:
 			'TCP_CWR': 0x80
 		}
 		self.verbose = False
-		self.listener = FTPListener(self.sport, self.dport, self.dst)
+		self.interact = interact
+		self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact)
 		self.listen_thread = Thread(target = self.listener.listen)
 		self.listen_thread.start()
 
@@ -215,8 +218,8 @@ class FTPClient:
 	'''	
 		Initializes fields
 	'''
-	def __init__(self, dst, dport):
-		self.sport = random.randint(1024, 65535)
+	def __init__(self, dst, sport, dport, interact=True):
+		self.sport = sport
 		self.dport = dport
 		self.src = None
 		self.dst = dst
@@ -233,7 +236,8 @@ class FTPClient:
 		}
 		self.passive_port = None
 		self.verbose = False
-		self.listener = FTPListener(self.sport, self.dport, self.dst)
+		self.interact = interact
+		self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact)
 		self.listen_thread = Thread(target = self.listener.listen)
 		self.listen_thread.start()
 		self.passive_obj = None
@@ -295,7 +299,7 @@ class FTPClient:
 		manage_passive: if new passive connection is created, respective helper functions called.		
 	'''
 	def manage_passive(self, command):
-		passive = FTPPassive(self.dst, self.passive_port)
+		passive = FTPPassive(self.dst, self.passive_port, interact=self.interact)
 		passive.handshake()
 		base_cmd = command.split('\r\n')[0]
 		cmd = base_cmd.split(' ')[0]
@@ -358,19 +362,70 @@ class FTPClient:
 				self.run_command(command)
 
 if __name__ == '__main__':
+	command_queue = Queue([100])
+
+	def manage_multiple(n, user, passwd):
+		ports = []
+		for i in range(n):
+			p = random.randint(1024, 65535)
+			while p in ports:
+				p = random.randint(1024, 65535)
+			ports.append(p)
+		connections = []
+		for i in range(n):
+			c = FTPClient(server_ip, ports[i], server_port, interact=False)
+			c.handshake()
+			connections.append(c)
+
+		run_cmd_multiple(connections, n, 'USER ' + user + '\r\n')
+		run_cmd_multiple(connections, n, 'PASS ' + passwd + '\r\n')
+
+		while True:
+			sys.stdout.write(">> ")
+			c = raw_input()
+			c += '\r\n'			
+			
+			if c == 'exit\r\n':
+				for i in range(n):
+					connections[i].close()
+				return
+
+			run_cmd_multiple(connections, n, c)
+			
+
+	def run_cmd_multiple(connections, n, cmd):		
+		threads = []
+		for i in range(n):
+			t = Thread(target=connections[i].run_command, args=(cmd,))
+			t.start()
+			threads.append(t)
+		for i in range(n):
+			threads[i].join()			
+
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-6', '--ipv6', help='User FTP on IPv6 network', action='store_true')
 	parser.add_argument('-u', '--user', help='Username for FTP login', nargs=1, type=str, required=True)
 	parser.add_argument('-l', '--passwd', help='Password for FTP login', nargs=1, type=str, required=True)
 	parser.add_argument('-i', '--ipaddr', help='FTP server IP address', nargs=1, type=str, required=True)
 	parser.add_argument('-p', '--port', help='Port address of FTP server', nargs=1, type=int, required=True)
+	parser.add_argument('-m', '--multiple', help='Open given number of connections to FTP server', nargs=1, type=int)
 	args = parser.parse_args()
 
 	if args.ipv6:
 		IP = IPv6
 
-	client = FTPClient(args.ipaddr[0], args.port[0])
-	client.handshake()
-	client.run_command('USER ' + args.user[0] + '\r\n')
-	client.run_command('PASS ' + args.passwd[0] + '\r\n')
-	client.interactive()
+	server_ip = args.ipaddr[0]
+	server_port = args.port[0]
+	client_port = random.randint(1024, 65535)
+
+	if args.multiple:
+		print "Multiple mode"
+		num = args.multiple[0]
+		manage_multiple(num, args.user[0], args.passwd[0])
+	else:
+		client = FTPClient(server_ip, client_port, server_port)
+		client.handshake()
+		client.run_command('USER ' + args.user[0] + '\r\n')
+		client.run_command('PASS ' + args.passwd[0] + '\r\n')
+		client.interactive()
