@@ -370,7 +370,18 @@ class FTPClient:
 if __name__ == '__main__':
 	command_queue = Queue([100])
 
-	def manage_multiple(n, user, passwd):
+
+	def fetch_commands(n):
+		sys.stdout.write(">> ")
+		cmd = raw_input()
+		c = [cmd] * n
+		if cmd == 'exit':
+			return []
+		return c
+
+
+
+	def manage_multiple(n, user, passwd, infile):
 		ports = []
 		for i in range(n):
 			p = random.randint(1024, 65535)
@@ -384,17 +395,36 @@ if __name__ == '__main__':
 			c.handshake()
 			connections.append(c)
 
-		run_cmd_multiple(connections, n, 'USER ' + user + '\r\n')
-		run_cmd_multiple(connections, n, 'PASS ' + passwd + '\r\n')
+		run_cmd_multiple(connections, n, ['USER ' + user] * n)
+		run_cmd_multiple(connections, n, ['PASS ' + passwd] * n)
+
+		cmds = []
+		if infile:
+			with open(infile, 'r') as f:
+				cmds = f.read().split('\n')
+			cmd_list = []
+			for c in cmds:
+				if c.strip():
+					cmd_list.append(c.strip().split(','))
+			cmd_list = cmd_list[::-1]
 
 		while True:
-			sys.stdout.write(">> ")
-			c = raw_input()
-			c += '\r\n'			
+			if infile:
+				if not len(cmd_list):
+					c = []
+				else:
+					c = cmd_list.pop()
+			else:
+				c = fetch_commands(n)
+			# c += '\r\n'			
 			
-			if c == 'exit\r\n':
+			print c
+
+			if len(c) != n:
+				if len(c):
+					print "Insufficient commands {} for {} connections".format(','.join(c), n)
 				for i in range(n):
-					with open(connections[i], 'a') as f:
+					with open(connections[i].logfile, 'a') as f:
 						f.write('Exiting...\n\n')
 					connections[i].close()
 				return
@@ -402,9 +432,10 @@ if __name__ == '__main__':
 			run_cmd_multiple(connections, n, c)
 			
 
-	def run_cmd_multiple(connections, n, cmd):		
+	def run_cmd_multiple(connections, n, cmd_list):		
 		threads = []
 		for i in range(n):
+			cmd = cmd_list[i] + '\r\n'
 			with open(connections[i].logfile, 'a') as f:
 				f.write(">>> {}".format(cmd))
 			t = Thread(target=connections[i].run_command, args=(cmd,))
@@ -421,6 +452,7 @@ if __name__ == '__main__':
 	parser.add_argument('-i', '--ipaddr', help='FTP server IP address', nargs=1, type=str, required=True)
 	parser.add_argument('-p', '--port', help='Port address of FTP server', nargs=1, type=int, required=True)
 	parser.add_argument('-m', '--multiple', help='Open given number of connections to FTP server', nargs=1, type=int)
+	parser.add_argument('-c', '--command_file', help='Run commands from given file for multi connections', nargs=1, type=str)
 	args = parser.parse_args()
 
 	if args.ipv6:
@@ -433,7 +465,10 @@ if __name__ == '__main__':
 	if args.multiple:
 		print "Multiple mode"
 		num = args.multiple[0]
-		manage_multiple(num, args.user[0], args.passwd[0])
+		infile = None
+		if args.command_file:
+			infile = args.command_file[0]
+		manage_multiple(num, args.user[0], args.passwd[0], infile)
 	else:
 		client = FTPClient(server_ip, client_port, server_port)
 		client.handshake()
