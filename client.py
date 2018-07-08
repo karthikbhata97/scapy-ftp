@@ -16,7 +16,7 @@ class FTPListener:
 	'''	
 		Initializes fields
 	'''
-	def __init__(self, sport, dport, dst, interact=True):
+	def __init__(self, sport, dport, dst, interact=True, logfile=None):
 		self.sport = sport
 		self.dport = dport
 		self.src = None
@@ -37,6 +37,7 @@ class FTPListener:
 		self.passive_port = None
 		self.data_share = Queue([50000])
 		self.interact = interact 
+		self.logfile = logfile
 
 	'''
 		sniff_filter: filters packet based on port it is listening on
@@ -51,6 +52,9 @@ class FTPListener:
 		if Raw in pkt:
 			if self.interact:
 				print pkt[Raw].load
+			else:
+				with open(self.logfile, 'a') as f:
+					f.write(pkt[Raw].load)
 			self.data_share.put(pkt[Raw].load)
 
 		if Raw in pkt and pkt[Raw].load[0:3] == '227':
@@ -114,7 +118,7 @@ class FTPPassive:
 	'''	
 		Initializes fields
 	'''
-	def __init__(self, dst, dport, interact=True):
+	def __init__(self, dst, dport, interact=True, logfile=None):
 		self.sport = random.randint(1024, 65535)
 		self.dport = dport
 		self.src = None
@@ -132,7 +136,8 @@ class FTPPassive:
 		}
 		self.verbose = False
 		self.interact = interact
-		self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact)
+		self.logfile = logfile
+		self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact, logfile=self.logfile)
 		self.listen_thread = Thread(target = self.listener.listen)
 		self.listen_thread.start()
 
@@ -218,7 +223,7 @@ class FTPClient:
 	'''	
 		Initializes fields
 	'''
-	def __init__(self, dst, sport, dport, interact=True):
+	def __init__(self, dst, sport, dport, interact=True, logfile=None):
 		self.sport = sport
 		self.dport = dport
 		self.src = None
@@ -237,7 +242,8 @@ class FTPClient:
 		self.passive_port = None
 		self.verbose = False
 		self.interact = interact
-		self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact)
+		self.logfile = logfile
+		self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact, logfile=self.logfile)
 		self.listen_thread = Thread(target = self.listener.listen)
 		self.listen_thread.start()
 		self.passive_obj = None
@@ -299,7 +305,7 @@ class FTPClient:
 		manage_passive: if new passive connection is created, respective helper functions called.		
 	'''
 	def manage_passive(self, command):
-		passive = FTPPassive(self.dst, self.passive_port, interact=self.interact)
+		passive = FTPPassive(self.dst, self.passive_port, interact=self.interact, logfile=self.logfile)
 		passive.handshake()
 		base_cmd = command.split('\r\n')[0]
 		cmd = base_cmd.split(' ')[0]
@@ -373,7 +379,8 @@ if __name__ == '__main__':
 			ports.append(p)
 		connections = []
 		for i in range(n):
-			c = FTPClient(server_ip, ports[i], server_port, interact=False)
+			logfile = 'ftp-client-{}.log'.format(i)
+			c = FTPClient(server_ip, ports[i], server_port, interact=False, logfile=logfile)
 			c.handshake()
 			connections.append(c)
 
@@ -387,6 +394,8 @@ if __name__ == '__main__':
 			
 			if c == 'exit\r\n':
 				for i in range(n):
+					with open(connections[i], 'a') as f:
+						f.write('Exiting...\n\n')
 					connections[i].close()
 				return
 
@@ -396,6 +405,8 @@ if __name__ == '__main__':
 	def run_cmd_multiple(connections, n, cmd):		
 		threads = []
 		for i in range(n):
+			with open(connections[i].logfile, 'a') as f:
+				f.write(">>> {}".format(cmd))
 			t = Thread(target=connections[i].run_command, args=(cmd,))
 			t.start()
 			threads.append(t)
