@@ -82,12 +82,12 @@ class FTPPassive:
         """
         Closes TCP connection.
         """
-        self.listen_thread.join()
         pkt = self.basic_pkt
         pkt[TCP].flags = 'FA'
         pkt[TCP].seq = self.listener.next_seq
         pkt[TCP].ack = self.listener.next_ack
-        sr1(pkt, verbose=self.verbose)
+        send(pkt, verbose=self.verbose)
+        self.listen_thread.join()
 
 
     def send_pkt(self, pkt):
