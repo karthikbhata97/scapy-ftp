@@ -88,17 +88,15 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     parser = argparse.ArgumentParser()
-    # parser.add_argument('-6', '--ipv6', help='User FTP on IPv6 network', action='store_true')
     parser.add_argument('-u', '--user', help='Username for FTP login', nargs=1, type=str, required=True)
     parser.add_argument('-l', '--passwd', help='Password for FTP login', nargs=1, type=str, required=True)
     parser.add_argument('-i', '--ipaddr', help='FTP server IP address', nargs=1, type=str, required=True)
-    parser.add_argument('-p', '--port', help='Port address of FTP server', nargs=1, type=int, required=True)
-    parser.add_argument('-m', '--multiple', help='Open given number of connections to FTP server', nargs=1, type=int)
-    parser.add_argument('-c', '--command_file', help='Run commands from given file for multi connections', nargs=1, type=str)
+    parser.add_argument('-p', '--port', help='FTP server port number', nargs=1, type=int, required=True)
+    parser.add_argument('-m', '--multiple', help='Open multiple connections to FTP server', nargs=1, type=int)
+    parser.add_argument('-c', '--command_file', help='Run commands from given file for multi connections. \
+                        Each line has n(number of multiple connections) comma seperated FTP commands.', 
+                        nargs=1, type=str)
     args = parser.parse_args()
-
-    # if args.ipv6:
-        # IP = IPv6
 
     server_ip = args.ipaddr[0]
     server_port = args.port[0]

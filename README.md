@@ -1,8 +1,38 @@
 # FTP client using Scapy
 
+### Requirements
+* Scapy on Python2.7
+* Update iptables to prevent sending RST
+  ```
+  bash update_iptables.sh
+  ``` 
+
+
 Usage:
 ```
-sudo python2.7 client.py [-h] [-6] -u USER -l PASSWD -i IPADDR -p PORT
+sudo python2.7 src/client.py [-h] -u USER -l PASSWD -i IPADDR -p PORT [-m MULTIPLE] [-c COMMAND_FILE]
+
+optional arguments:
+  -h, --help            show this help message and exit
+
+  -u USER, --user USER  
+  Username for FTP login
+
+  -l PASSWD, --passwd PASSWD
+  Password for FTP login
+
+  -i IPADDR, --ipaddr IPADDR
+  FTP server IP address
+
+  -p PORT, --port PORT
+  FTP server port number
+
+  -m MULTIPLE, --multiple MULTIPLE
+  Open multiple connections to FTP server
+
+  -c COMMAND_FILE, --command_file COMMAND_FILE
+  Run commands from given file for multiple connections.
+  Each line has n(number of multiple connections) comma seperated FTP commands.
 ```
 
 eg: sudo python2.7 client.py -u test -l test -i 172.16.1.125 -p 21
@@ -18,11 +48,11 @@ python2.7 client.py -h
 
 ## Implementation
 
-* Class FTPClient
+* Class FTPClient (ftp_client.py)
 	Takes input from user and sends it to the specified server.
-* Class FTPListener
+* Class FTPListener (ftp_listener.py)
 	For a given connection, it sniffs packets and acknowledges them accordingly as well as stores data recieved in them.
-* Class FTPPassive
+* Class FTPPassive (ftp_passive.py)
 	When command brings up passive mode, it's object is used to communicate with server.
 
 
@@ -55,4 +85,5 @@ python2.7 server.py -h
 	Runs commands supplied by the client
 * Class FTPListener
 	For a given connection, it sniffs packets and acknowledges them accordingly as well as passes commands to the server connection.
-
+* Class FTPPassiveListener
+    For passive mode commands.
