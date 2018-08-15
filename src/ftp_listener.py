@@ -68,8 +68,9 @@ class FTPListener:
         next_ack = self.get_next_ack(pkt)
 
         if (pkt[TCP].flags == self.tcp_flags['TCP_ACK']):
-            if next_ack != 1:
-                self.send_ack(pkt)
+            # if next_ack != 1:
+                # self.send_ack(pkt)
+            pass
         else:
             self.send_ack(pkt)
 
