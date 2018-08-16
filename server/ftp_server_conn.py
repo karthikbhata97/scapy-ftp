@@ -155,6 +155,11 @@ class FTPServerConnectiton:
             self.send_data(self.__resp['path_not_found'])
 
 
+    def TYPE(self, cmd):
+        self.__type = cmd.split(' ')[1]
+        self.send_data(self.__resp['type_set'] % (self.__type,))
+
+
     def PASV(self, cmd):
         self.__pasv = True
         port = randint(1024, 65535)
@@ -172,17 +177,51 @@ class FTPServerConnectiton:
 
     def LIST(self, cmd):
 
-        if self.__pasv:
-            self.send_data(self.__resp['dir_list'])
-
-            self.passive_obj.command(cmd, self.__currdir)
-
-            self.send_data(self.__resp['transfer_complete'])
-            self.__pasv = False
-
-        else:
+        if not self.__pasv:
             self.send_data('Active mode not yet implemented\r\n')
+            return
+
+        self.send_data(self.__resp['dir_list'])
+
+        self.passive_obj.LIST(cmd, self.__currdir)
+
+        self.send_data(self.__resp['transfer_complete'])
+        self.__pasv = False
 
 
+    def RETR(self, cmd):
+        if not self.__pasv:
+            self.send_data('Active mode not yet implemented\r\n')
+            return
 
+        cmd = cmd.split(' ')
 
+        filename = self.__currdir + '/' + cmd[1]
+        filename_abs = path.abspath(filename)
+
+        if len(filename_abs.split(self.__dirname)) == 1:
+            self.send_data(self.__resp['not_file'] % (cmd[1],))
+            self.passive_obj.close()
+            return
+
+        self.send_data(self.__resp['open_data_conn'])
+        self.passive_obj.RETR(cmd, filename_abs)
+        self.send_data(self.__resp['transfer_complete'])
+        
+
+    def STOR(self, cmd):
+        filename = self.__currdir + '/' + cmd.split(' ')[1]
+
+        filename_abs = path.abspath(filename)
+
+        if len(filename_abs.split(self.__dirname)) == 1:
+            self.send_data(self.__resp['not_file'] % (cmd[1],))
+            self.passive_obj.close()
+            return
+
+        with open(filename_abs, 'w') as f:
+            f.write('')
+
+        self.send_data(self.__resp['open_data_conn'])
+        self.passive_obj.STOR(cmd, filename_abs)
+        self.send_data(self.__resp['transfer_complete'])

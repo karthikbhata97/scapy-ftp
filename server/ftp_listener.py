@@ -2,6 +2,7 @@ from scapy.all import *
 from Queue import Queue
 
 class FTPListener:
+    __closed = False
     # Initializes the fields
     def __init__(self, src, dst, sport, dport, seqno, ackno):
         self.src = src
@@ -67,6 +68,9 @@ class FTPListener:
             pass
         else:
             self.send_ack(pkt)
+
+        if (pkt[TCP].flags & self.tcp_flags['TCP_FIN']):
+            self.__closed = True
 
         # manage ack
 

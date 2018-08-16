@@ -2,6 +2,7 @@ from scapy.all import *
 from ftp_listener import FTPListener
 from threading import Thread
 from subprocess import check_output
+from os import path
 
 
 class FTPPassiveServer:
@@ -29,6 +30,7 @@ class FTPPassiveServer:
 
         self.handshake_complete = False
         self.verbose = verbose
+        self.__stor_complete = False
 
     def handshake(self, pkt):
         pkt.summary()
@@ -87,6 +89,9 @@ class FTPPassiveServer:
         """
         Close TCP connection.
         """
+        # In case handshake is not complete but still want to close
+        self.handshake_complete = True
+
         pkt = self.basic_pkt
         pkt[TCP].flags = 'FA'
         pkt[TCP].seq = self.listener.next_seq
@@ -95,15 +100,29 @@ class FTPPassiveServer:
         self.listener_thread.join()
 
 
-    def command(self, cmd, currdir):
-        if cmd == 'LIST':
-            dir_list = check_output(['ls', '-l', currdir])
-            dir_list = dir_list.split('\n', 1)[1]
-            self.send_data(dir_list)
-            self.close()
+    def LIST(self, cmd, currdir):
+        dir_list = check_output(['ls', '-l', currdir])
+        dir_list = dir_list.split('\n', 1)[1]
 
-        else:
-            self.send_data("Not implemented")
-            self.close()
+        self.send_data(dir_list)
+        self.close()
 
 
+    def RETR(self, cmd, filename):
+
+        with open(filename, 'rb') as f:
+            data = f.read()
+
+        self.send_data(data)
+        self.close()
+
+
+    def STOR(self, cmd, filename):
+        while not self.listener.__closed: 
+
+            if not self.listener.data_share.empty():
+                data = self.listener.data_share.get()
+                with open(filename, 'a') as f:
+                    f.write(data)
+
+        self.close()
