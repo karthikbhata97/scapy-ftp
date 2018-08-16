@@ -118,7 +118,8 @@ class FTPPassiveServer:
 
 
     def STOR(self, cmd, filename):
-        while not self.listener.__closed: 
+        print dir(self.listener)
+        while not self.listener.closed: 
 
             if not self.listener.data_share.empty():
                 data = self.listener.data_share.get()
