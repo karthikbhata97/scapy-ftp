@@ -34,6 +34,7 @@ class FTPServerConnectiton:
         'transfer_complete': '226 Transfer complete.\r\n',
         'dir_list': '150 Here comes the directory listing.\r\n',
         'pasv_mode': '227 Entering Passive Mode (%s,%u,%u).\r\n',
+        'active_mode': '200 PORT command successful.\r\n',
     }
 
     # initialize the fields
@@ -175,24 +176,39 @@ class FTPServerConnectiton:
         self.send_data(self.__resp['pasv_mode'] % (dst, p_upper, p_lower))
 
 
-    def LIST(self, cmd):
+    def PORT(self, cmd):
+        cmd = cmd.split(' ')
 
-        if not self.__pasv:
-            self.send_data('Active mode not yet implemented\r\n')
-            return
+        ip = cmd[1].split(',')[:4]
+        ip = '.'.join(ip)
+
+        p_upper = cmd[1].split(',')[4]
+        p_lower = cmd[1].split(',')[5]
+
+        dport = (int(p_upper) << 8) + int(p_lower)
+        # sport = randint(1024, 65535)
+
+        self.passive_obj = FTPPassiveServer(self.src, ip, 20, dport)
+        self.passive_thread = Thread(target=self.passive_obj.run_active)
+        self.passive_thread.start()
+
+        print dport
+        self.send_data(self.__resp['active_mode'])
+
+
+    def LIST(self, cmd):
 
         self.send_data(self.__resp['dir_list'])
 
         self.passive_obj.LIST(cmd, self.__currdir)
 
         self.send_data(self.__resp['transfer_complete'])
-        self.__pasv = False
+
+        if self.__pasv:
+            self.__pasv = False
 
 
     def RETR(self, cmd):
-        if not self.__pasv:
-            self.send_data('Active mode not yet implemented\r\n')
-            return
 
         cmd = cmd.split(' ')
 
@@ -208,6 +224,9 @@ class FTPServerConnectiton:
         self.passive_obj.RETR(cmd, filename_abs)
         self.send_data(self.__resp['transfer_complete'])
         
+        if self.__pasv:
+            self.__pasv = False
+
 
     def STOR(self, cmd):
         filename = self.__currdir + '/' + cmd.split(' ')[1]
@@ -225,3 +244,6 @@ class FTPServerConnectiton:
         self.send_data(self.__resp['open_data_conn'])
         self.passive_obj.STOR(cmd, filename_abs)
         self.send_data(self.__resp['transfer_complete'])
+
+        if self.__pasv:
+            self.__pasv = False

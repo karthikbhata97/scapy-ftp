@@ -64,6 +64,22 @@ class FTPPassiveServer:
     def run(self):
         sniff(prn=self.handshake, lfilter=self.sniff_filter, stop_filter=self.stop_filter)
 
+    def run_active(self):
+        self.basic_pkt = IP(src=self.src, dst=self.dst)/TCP(sport=self.sport, dport=self.dport)
+
+        self.listener = FTPListener(self.src, self.dst, self.sport, self.dport, self.next_seq, self.next_ack)
+        self.listener_thread = Thread(target=self.listener.listen)
+        self.listener_thread.start()
+
+        pkt = self.basic_pkt
+        pkt[TCP].flags = 'S'
+        pkt[TCP].seq = self.listener.next_seq
+        pkt[TCP].ack = self.listener.next_ack
+
+        seq_next = self.listener.next_seq 
+        while self.listener.next_seq == seq_next:
+            sr1(pkt, timeout=1, verbose=self.verbose)
+
 
     # Put the reply into a packet
     def send_data(self, data):
