@@ -2,7 +2,6 @@ from scapy.all import *
 from Queue import Queue
 
 class FTPListener:
-    __closed = False
     # Initializes the fields
     def __init__(self, src, dst, sport, dport, seqno, ackno):
         self.src = src
@@ -24,6 +23,8 @@ class FTPListener:
         }
         self.basic_pkt = IP(src=self.src, dst=self.dst)/TCP(sport=self.sport, dport=self.dport)
         self.verbose = False
+
+        self.closed = False
 
     # gets next ack number based on TCP segment length
     def get_next_ack(self, pkt):
@@ -70,7 +71,7 @@ class FTPListener:
             self.send_ack(pkt)
 
         if (pkt[TCP].flags & self.tcp_flags['TCP_FIN']):
-            self.__closed = True
+            self.closed = True
 
         # manage ack
 
