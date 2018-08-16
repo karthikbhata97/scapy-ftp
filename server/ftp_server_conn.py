@@ -172,7 +172,6 @@ class FTPServerConnectiton:
         self.passive_thread = Thread(target=self.passive_obj.run)
         self.passive_thread.start()
 
-        print port
         self.send_data(self.__resp['pasv_mode'] % (dst, p_upper, p_lower))
 
 
@@ -192,7 +191,6 @@ class FTPServerConnectiton:
         self.passive_thread = Thread(target=self.passive_obj.run_active)
         self.passive_thread.start()
 
-        print dport
         self.send_data(self.__resp['active_mode'])
 
 

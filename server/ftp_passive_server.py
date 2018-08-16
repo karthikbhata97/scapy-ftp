@@ -83,7 +83,6 @@ class FTPPassiveServer:
 
     # Put the reply into a packet
     def send_data(self, data):
-        data = data.replace('\n', '\r\n')
 
         chunk_sz = 512
         data_chunks = [data[i:i+chunk_sz] for i in range(0, len(data), chunk_sz)]
@@ -120,13 +119,14 @@ class FTPPassiveServer:
         dir_list = check_output(['ls', '-l', currdir])
         dir_list = dir_list.split('\n', 1)[1]
 
+        dir_list = dir_list.replace('\n', '\r\n')
         self.send_data(dir_list)
         self.close()
 
 
     def RETR(self, cmd, filename):
 
-        with open(filename, 'rb') as f:
+        with open(filename, 'r') as f:
             data = f.read()
 
         self.send_data(data)
@@ -134,7 +134,6 @@ class FTPPassiveServer:
 
 
     def STOR(self, cmd, filename):
-        print dir(self.listener)
         while not self.listener.closed: 
 
             if not self.listener.data_share.empty():
