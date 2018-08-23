@@ -1,19 +1,22 @@
 from scapy.all import *
 from tcp_connection import TCP_IPv6
 from threading import Thread
+import sys
 
 
 class FTPClient:
 
     __passive_cmd = ['LIST', 'STOR', 'RETR']
 
-    def __init__(self, src, dst, sport, dport, verbose=False):
+    def __init__(self, src, dst, sport, dport, verbose=False, logfile=None):
 
         self.tcp_connection = TCP_IPv6(src, dst, sport, dport)
         
         self.tcp_connection.handshake()
 
         self.close = False
+
+        self.logfile = logfile
 
         self.logger_thread = Thread(target=self.logger)
         self.logger_thread.start()
@@ -51,22 +54,29 @@ class FTPClient:
         else:
             print (cmd, 'No such command')
                 
+        self.passive_connection.close()
 
 
     def run_command(self, cmd):
         if cmd.split(' ')[0] in self.__passive_cmd:
             self.send_data('EPSV\r\n')
-            sport = random.randint(1024, 65535)
+            while not self.passive_port:
+                pass
+
             dport = self.passive_port
+            sport = random.randint(1024, 65535)
+
             self.passive_connection = TCP_IPv6(self.tcp_connection.src, self.tcp_connection.dst, sport, dport)
             self.passive_connection.handshake()
             self.passive_mode = True
+
             pasv_thread = Thread(target=self.run_passive, args=(cmd,))
             pasv_thread.start()
             cmd = cmd + '\r\n'
             self.send_data(cmd)
-            self.passive_connection.close()
+
             self.passive_mode = False
+            self.passive_port = None
             pasv_thread.join()
         else:
             cmd = cmd + '\r\n'
@@ -84,7 +94,12 @@ class FTPClient:
         while not self.close:
             if not data_share.empty():
                 data = data_share.get().decode('utf-8')
-                print (data)
+
+                if self.logfile:
+                    with open(self.logfile, 'w') as f:
+                        f.write(data)
+                else:
+                    sys.stdout.write(data)
 
                 if data[:3] == '229':
                     self.passive_port = int(data.split('|||')[1].split('|')[0])

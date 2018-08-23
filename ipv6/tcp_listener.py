@@ -1,5 +1,7 @@
 from scapy.all import *
 from queue import Queue
+from threading import Thread, Lock
+from time import sleep
 
 
 class TCP_IPv6_Listener:
@@ -34,6 +36,11 @@ class TCP_IPv6_Listener:
 
         self.basic_pkt = IPv6(src=self.src, dst=self.dst)/\
                          TCP(sport=self.sport, dport=self.dport)
+
+        self.ack_lock = Lock()
+        self.ack_value = None
+        self.ack_thread = Thread(target=self.send_ack_pkt)
+        self.ack_thread.start()
         
 
     def sniff_filter(self, pkt):
@@ -50,6 +57,11 @@ class TCP_IPv6_Listener:
 
 
     def manage_pkt(self, pkt):
+
+        if pkt.haslayer(Raw):
+            # print (pkt[TCP].seq, self.next_ack)
+            if pkt[TCP].seq >= self.next_ack:
+                self.data_share.put(pkt[Raw].load)
 
         if pkt[TCP].flags == self.tcp_flags['TCP_SYN']:
             self.next_ack = pkt[TCP].seq + 1
@@ -70,10 +82,9 @@ class TCP_IPv6_Listener:
             self.send_ack(pkt)
 
         if pkt[TCP].flags & self.tcp_flags['TCP_FIN']:
+            while self.ack_value:
+                pass
             self.dst_closed = True
-
-        if pkt.haslayer(Raw):
-            self.data_share.put(pkt[Raw].load)
 
 
     def get_next_ack(self, pkt):
@@ -83,13 +94,25 @@ class TCP_IPv6_Listener:
         return (ans if ans else 1)
 
 
-    def send_ack(self, pkt):
-        self.next_ack = pkt[TCP].seq + self.get_next_ack(pkt)
+    def send_ack_pkt(self):
         pkt = self.basic_pkt
         pkt[TCP].flags = 'A'
-        pkt[TCP].seq = self.next_seq
-        pkt[TCP].ack = self.next_ack
-        send(pkt, verbose=self.verbose) 
+        while not (self.src_closed and self.dst_closed):
+            with self.ack_lock:
+                if not self.ack_value:
+                    pass
+                else:
+                    pkt[TCP].seq = self.ack_value[0]
+                    pkt[TCP].ack = self.ack_value[1]
+                    send(pkt, verbose=self.verbose) 
+                    self.ack_value = None
+            sleep(0.1)
+                    
+
+    def send_ack(self, pkt):
+        self.next_ack = pkt[TCP].seq + self.get_next_ack(pkt)
+        with self.ack_lock:
+            self.ack_value = (self.next_seq, self.next_ack)
 
 
     def listen(self):
