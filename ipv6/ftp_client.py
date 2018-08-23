@@ -109,3 +109,17 @@ class FTPClient:
         self.close = True
         self.logger_thread.join()
         self.tcp_connection.close()
+
+
+    def interactive(self):
+        """
+        Creates an interactive terminal to enter commands.
+        """
+        command = ""
+        while True:
+            sys.stdout.write(">> ")
+            command = input()
+            self.run_command(command)
+            if command == 'QUIT':
+                self.quit()
+                return

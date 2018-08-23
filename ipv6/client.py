@@ -30,11 +30,4 @@ if __name__ ==  '__main__':
     client.run_command("USER testftp")
     client.run_command("PASS testftp")
     # client.quit()
-
-    cmd = ""
-    while cmd != "QUIT":
-        cmd = input()
-
-        client.run_command(cmd)
-    
-    client.quit()
+    client.interactive()
