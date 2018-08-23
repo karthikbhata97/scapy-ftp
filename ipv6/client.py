@@ -10,6 +10,8 @@ if __name__ ==  '__main__':
     arg_parser.add_argument('--iface', help='Interface name', nargs=1, type=str, required=True)
     arg_parser.add_argument('-i', '--host', help='Destiantion IP', nargs=1, type=str, required=True)
     arg_parser.add_argument('-p', '--port', help='Destination port', nargs=1, type=int, required=True)
+    arg_parser.add_argument('-u', '--user', help='Username for FTP', nargs=1, type=str, required=True)
+    arg_parser.add_argument('-l', '--passwd', help='Password for the FTP', nargs=1, type=str, required=True)
 
     args = arg_parser.parse_args()
 
@@ -27,7 +29,10 @@ if __name__ ==  '__main__':
 
     client = FTPClient(src, dst, sport, dport)
 
-    client.run_command("USER testftp")
-    client.run_command("PASS testftp")
+    username = args.user[0]
+    password = args.passwd[0]
+
+    client.run_command("USER %s" % (username,))
+    client.run_command("PASS %s" % (password,))
     # client.quit()
     client.interactive()

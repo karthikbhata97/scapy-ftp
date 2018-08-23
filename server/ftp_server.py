@@ -5,7 +5,14 @@ from threading import Thread
 
 class FTPServer:
     # initialize the fields
+    """
+    Wrapper class on the FTPServerConnection. Listens and creates new connection
+    for each for new SYN.
+    """
     def __init__(self, sport):
+        """
+        Initializes server parameters.
+        """
         self.sport = sport
         self.verbose = False
         self.tcp_flags = {
@@ -21,6 +28,9 @@ class FTPServer:
 
     # complete the handshake with the client
     def handshake(self, pkt):
+        """
+        TCP handshake is completed for each SYN and new connection is created.
+        """
         pkt.summary()
         dst = pkt[IP].src
         src = pkt[IP].dst
@@ -39,9 +49,15 @@ class FTPServer:
 
     # Filter packets to be recieved based on port and flag (SYN)
     def sniff_filter(self, pkt):
+        """
+        Filter only the packets destined to the server.
+        """
         return pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and pkt[TCP].flags == self.tcp_flags['TCP_SYN'] 
         # and pkt.haslayer(IP) and pkt[IP].dst == self.src
 
     def run(self):
+        """
+        Main thread function to run the server. Calls scapy sniff.
+        """
         sniff(prn=self.handshake, lfilter=self.sniff_filter)
 

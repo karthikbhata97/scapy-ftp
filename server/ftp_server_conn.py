@@ -6,7 +6,9 @@ from ftp_passive_server import FTPPassiveServer
 from random import randint
 
 class FTPServerConnectiton:
-
+    """
+    Main class handling the server. Object is created for each connection.
+    """
     __dirname = path.abspath(".")
     __currdir = __dirname
     __pasv = False
@@ -39,6 +41,9 @@ class FTPServerConnectiton:
 
     # initialize the fields
     def __init__(self, src, dst, sport, dport, seqno, ackno):
+        """
+        Initializes the src, dst parameters.
+        """
         self.src = src
         self.dst = dst
         self.sport = sport
@@ -61,6 +66,9 @@ class FTPServerConnectiton:
 
     # Run the commands
     def command(self, cmd):
+        """
+        Accepts command and calls the corresponding function handler.
+        """
         print 'command %s recieved' % (cmd,)
 
         def default_resp(cmd):
@@ -71,11 +79,17 @@ class FTPServerConnectiton:
 
     # Put the reply into a packet
     def send_data(self, data):
+        """
+        Helper function to send data into the wire.
+        """
         pkt = self.basic_pkt/Raw(load=data)
         self.send_pkt(pkt)
 
     # send the packet
     def send_pkt(self, pkt):
+        """
+        Function sends data with appropriate seq and ack numbers.
+        """
         pkt[TCP].flags = 'PA'
         pkt[TCP].seq = self.listener.next_seq
         pkt[TCP].ack = self.listener.next_ack
@@ -84,6 +98,9 @@ class FTPServerConnectiton:
 
     # server start
     def run(self):
+        """
+        Starts the server.
+        """
         self.send_data(self.__resp['welcome'])
 
         while not self.__finish:
@@ -107,6 +124,11 @@ class FTPServerConnectiton:
         self.listener_thread.join()
         self.__finish = True
 
+
+    """
+    All the following are the handlers for each of the commands.
+    New functions can be simply added to support the corresponding command.
+    """
     # Functions for respective commands
     def USER(self, cmd):
         try:

@@ -8,6 +8,9 @@ from os import path
 class FTPPassiveServer:
 
     def __init__(self, src, dst, sport, dport, verbose=False):
+        """
+        Initializes all the fields for current passive connection.
+        """
         self.src = src
         self.dst = dst
 
@@ -32,7 +35,12 @@ class FTPPassiveServer:
         self.verbose = verbose
         self.__stor_complete = False
 
+
     def handshake(self, pkt):
+        """
+        Creates a handshake by sending SYN and creating a listener for corresponding
+        connection.
+        """
         pkt.summary()
         self.dport = pkt[TCP].sport
         self.next_ack = pkt[TCP].seq + 1
@@ -49,8 +57,12 @@ class FTPPassiveServer:
         self.listener_thread = Thread(target=self.listener.listen)
         self.listener_thread.start()
 
+
     # Filter packets to be recieved based on port and flag (SYN)
     def sniff_filter(self, pkt):
+        """
+        packet filters based on the src and dst.
+        """
         return pkt.haslayer(IP) and pkt[IP].dst == self.src and pkt[IP].src == self.dst and \
                pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and \
                pkt[TCP].flags == self.tcp_flags['TCP_SYN'] 
@@ -58,13 +70,23 @@ class FTPPassiveServer:
 
 
     def stop_filter(self, pkt):
+        """
+        End of sniff filter for passive mode.
+        """
         return self.handshake_complete
 
 
     def run(self):
+        """
+        Passive mode main thread function.
+        """
         sniff(prn=self.handshake, lfilter=self.sniff_filter, stop_filter=self.stop_filter)
 
+
     def run_active(self):
+        """
+        Active mode main thread function, sets up a listener.
+        """
         self.basic_pkt = IP(src=self.src, dst=self.dst)/TCP(sport=self.sport, dport=self.dport)
 
         self.listener = FTPListener(self.src, self.dst, self.sport, self.dport, self.next_seq, self.next_ack)
@@ -83,7 +105,9 @@ class FTPPassiveServer:
 
     # Put the reply into a packet
     def send_data(self, data):
-
+        """
+        Helper funtion to send data.
+        """
         chunk_sz = 512
         data_chunks = [data[i:i+chunk_sz] for i in range(0, len(data), chunk_sz)]
         for data in data_chunks:
@@ -93,6 +117,9 @@ class FTPPassiveServer:
 
     # send the packet
     def send_pkt(self, pkt):
+        """
+        Sends packet and waits for acknowledgement.
+        """
         pkt[TCP].flags = 'PA'
         pkt[TCP].seq = self.listener.next_seq
         pkt[TCP].ack = self.listener.next_ack
@@ -116,6 +143,9 @@ class FTPPassiveServer:
 
 
     def LIST(self, cmd, currdir):
+        """
+        Helper function to handle LIST command.
+        """
         dir_list = check_output(['ls', '-l', currdir])
         dir_list = dir_list.split('\n', 1)[1]
 
@@ -125,6 +155,9 @@ class FTPPassiveServer:
 
 
     def RETR(self, cmd, filename):
+        """
+        Helper function to handle RETR command.
+        """
 
         with open(filename, 'r') as f:
             data = f.read()
@@ -134,6 +167,9 @@ class FTPPassiveServer:
 
 
     def STOR(self, cmd, filename):
+        """
+        Helper function to handle STOR command.
+        """
         while not self.listener.closed: 
 
             if not self.listener.data_share.empty():

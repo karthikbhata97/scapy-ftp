@@ -1,4 +1,4 @@
-# FTP client using Scapy
+# FTP client using Scapy (IPv4)
 
 ### Requirements
 * Scapy on Python2.7
@@ -59,8 +59,14 @@ python2.7 client/client.py -h
 
 
 
-# FTP server using Scapy
-    Under progress
+# FTP server using Scapy (IPv4)
+
+### Requirements
+* Scapy on Python2.7
+* Update iptables to prevent sending RST
+  ```
+  bash update_iptables.sh
+  ``` 
 
 Usage:
 ```
@@ -89,3 +95,41 @@ python2.7 server/server.py -h
 - For a given connection, it sniffs packets and acknowledges them accordingly as well as passes commands to the server connection.
 #### Class FTPPassiveServer (ftp_passive_server.py)
 - For passive mode commands.
+
+
+# FTP client using Scapy (IPv6)
+
+### Requirements
+* Python3(3.6) with Scapy
+* netifaces
+* Update iptable rules
+  ```
+  bash update_iptables.sh
+  ```
+
+Usage:
+```
+sudo python3.6 ipv6/client.py client.py [-h] --iface IFACE -i HOST -p PORT
+```
+
+eg: sudo python3.6 client.py --iface wlp3s0 -i  fe80::a00:27ff:fe1e:e615 -p 21
+
+* Help
+```
+python3.6 ipv6/client.py -h
+```
+
+* Client will connect to server based on given interface.
+* Session is logged in based on the credentials.
+* Supplied commands will be sent to server and response is shown.
+
+## Implementation
+
+#### Class FTPClient
+- Takes the commands as input and sends them over TCP/IPv6
+
+#### Class TCP_IPv6
+- Implements TCP/IPv6 stacks which can be made use by any of upper layer protocols.
+
+#### Class TCP_IPv6_Connection
+- Listener for the TCP_IPv6 class, reads packets and acknowledges them.
