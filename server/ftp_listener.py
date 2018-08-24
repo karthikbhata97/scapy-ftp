@@ -78,10 +78,10 @@ class FTPListener:
         """
         Callback for each captured packet and its response is given.
         """
+        self.next_seq = pkt[TCP].ack
+
         if Raw in pkt:
             self.data_share.put(pkt[Raw].load)
-
-        self.next_seq = pkt[TCP].ack
 
         if (pkt[TCP].flags == self.tcp_flags['TCP_ACK']):
             pass

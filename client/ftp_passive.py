@@ -3,6 +3,7 @@ from threading import Thread
 from ftp_listener import FTPListener
 from time import sleep
 import random
+import sys
 
 
 class FTPPassive:
@@ -40,6 +41,7 @@ class FTPPassive:
         self.verbose = False
         self.interact = interact
         self.logfile = logfile
+        self.complete = False
 
         self.listener = FTPListener(self.sport, self.dport, self.dst, interact=self.interact, logfile=self.logfile)
         self.listen_thread = Thread(target = self.listener.listen)
@@ -82,6 +84,8 @@ class FTPPassive:
         """
         Closes TCP connection.
         """
+        while not self.complete:
+            pass
         pkt = self.basic_pkt
         pkt[TCP].flags = 'FA'
         pkt[TCP].seq = self.listener.next_seq
@@ -105,12 +109,23 @@ class FTPPassive:
         """
         Copies data from the listener thread's shared queue into the file.
         """
+        if not file:
+            while True:
+                if not self.listener.data_share.empty():
+                    sys.stdout.write(self.listener.data_share.get())
+                if self.listener.data_share.empty() and not self.listen_thread.isAlive():
+                    break
+            self.complete = True
+            return
+
         with open(file, "w") as f:
             while True:
                 if not self.listener.data_share.empty():
                     f.write(self.listener.data_share.get())
                 if self.listener.data_share.empty() and not self.listen_thread.isAlive():
                     break
+
+        self.complete = True
 
 
     def sendfile(self, file):
@@ -127,7 +142,8 @@ class FTPPassive:
             pkt[TCP].ack = self.listener.next_ack
             pkt = pkt/Raw(load=item)
             self.send_pkt(pkt)
-        
+
+        self.complete = True 
         # self.close()
 
 

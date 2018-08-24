@@ -122,6 +122,9 @@ class FTPClient:
         if cmd == 'RETR':
             recv_thread = Thread(target=passive.recvfile, args=(base_cmd.split(' ')[1], ))
             recv_thread.start()
+        if cmd == 'LIST':
+            recv_thread = Thread(target=passive.recvfile, args=(None, ))
+            recv_thread.start()
         return passive
 
 
