@@ -194,10 +194,10 @@ class TCP_IPv6_Listener:
         if not self.connection_open and pkt[TCP].flags == self.tcp_flags['TCP_SYN']:
             self.next_ack = pkt[TCP].seq + 1
 
-            self.dst = pkt[IP].src
+            self.dst = pkt[IPv6].src
             self.dport = pkt[TCP].sport
 
-            self.basic_pkt[IP].dst =  self.dst
+            self.basic_pkt[IPv6].dst =  self.dst
             self.basic_pkt[TCP].dport = self.dport
 
             pkt = self.basic_pkt

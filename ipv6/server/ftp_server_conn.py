@@ -1,4 +1,5 @@
 from tcp_connection import TCP_IPv6
+from ftp_data_conn import FTPDataConnection
 from threading import Thread
 from random import randint
 from os import path
@@ -35,8 +36,8 @@ class FTPServerConnection:
         'open_data_conn': '150 Opening data connection.\r\n',
         'transfer_complete': '226 Transfer complete.\r\n',
         'dir_list': '150 Here comes the directory listing.\r\n',
-        'pasv_mode': '227 Entering Passive Mode (%s,%u,%u).\r\n',
-        'active_mode': '200 PORT command successful.\r\n',
+        'pasv_mode': '229 Entering Extended Passive Mode (|||%u|)\r\n',
+        'active_mode': '200 EPRT command successful.\r\n',
     }
 
     # initialize the fields
@@ -44,7 +45,12 @@ class FTPServerConnection:
         """
         Initializes the src, dst parameters.
         """
-        
+        self.src = src
+        self.dst = dst
+
+        self.sport = sport
+        self.dport = dport
+
         self.tcp_conn = TCP_IPv6(src, dst, sport, dport, seqno, ackno)
         self.tcp_conn.listener.connection_open = True
 
@@ -138,36 +144,26 @@ class FTPServerConnection:
         self.__type = cmd.split(' ')[1]
         self.send_data(self.__resp['type_set'] % (self.__type,))
 
-'''
-    def PASV(self, cmd):
+
+    def EPSV(self, cmd):
         self.__pasv = True
         port = randint(1024, 65535)
-        p_upper = (port >> 8) & 0xff
-        p_lower = port & 0xff
-        dst = ','.join(self.src.split('.'))
 
-        self.passive_obj = FTPPassiveServer(self.src, self.dst, port, None)
-        self.passive_thread = Thread(target=self.passive_obj.run)
-        self.passive_thread.start()
+        self.data_conn = FTPDataConnection(self.src, self.dst, port, None)
 
-        self.send_data(self.__resp['pasv_mode'] % (dst, p_upper, p_lower))
+        self.send_data(self.__resp['pasv_mode'] % (port,))
 
 
-    def PORT(self, cmd):
-        cmd = cmd.split(' ')
+    def EPRT(self, cmd):
+        cmd = cmd.split('|')
 
-        ip = cmd[1].split(',')[:4]
-        ip = '.'.join(ip)
+        dst = cmd[2]
 
-        p_upper = cmd[1].split(',')[4]
-        p_lower = cmd[1].split(',')[5]
-
-        dport = (int(p_upper) << 8) + int(p_lower)
+        dport = int(cmd[3])
         # sport = randint(1024, 65535)
 
-        self.passive_obj = FTPPassiveServer(self.src, ip, 20, dport)
-        self.passive_thread = Thread(target=self.passive_obj.run_active)
-        self.passive_thread.start()
+        self.data_conn = FTPDataConnection(self.src, dst, 20, dport)
+        self.data_conn.run_active()
 
         self.send_data(self.__resp['active_mode'])
 
@@ -176,7 +172,7 @@ class FTPServerConnection:
 
         self.send_data(self.__resp['dir_list'])
 
-        self.passive_obj.LIST(cmd, self.__currdir)
+        self.data_conn.LIST(cmd, self.__currdir)
 
         self.send_data(self.__resp['transfer_complete'])
 
@@ -193,11 +189,11 @@ class FTPServerConnection:
 
         if len(filename_abs.split(self.__dirname)) == 1:
             self.send_data(self.__resp['not_file'] % (cmd[1],))
-            self.passive_obj.close()
+            self.data_conn.close()
             return
 
         self.send_data(self.__resp['open_data_conn'])
-        self.passive_obj.RETR(cmd, filename_abs)
+        self.data_conn.RETR(cmd, filename_abs)
         self.send_data(self.__resp['transfer_complete'])
         
         if self.__pasv:
@@ -211,17 +207,16 @@ class FTPServerConnection:
 
         if len(filename_abs.split(self.__dirname)) == 1:
             self.send_data(self.__resp['not_file'] % (cmd[1],))
-            self.passive_obj.close()
+            self.data_conn.close()
             return
 
         with open(filename_abs, 'w') as f:
             f.write('')
 
         self.send_data(self.__resp['open_data_conn'])
-        self.passive_obj.STOR(cmd, filename_abs)
+        self.data_conn.STOR(cmd, filename_abs)
         self.send_data(self.__resp['transfer_complete'])
 
         if self.__pasv:
             self.__pasv = False
-'''
             
