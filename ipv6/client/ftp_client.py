@@ -32,7 +32,11 @@ class FTPClient:
         if cmd[0] == 'LIST':
             while self.passive_mode:
                 if not data_share.empty():
-                    print (data_share.get().decode('utf-8'))
+                    if self.logfile:
+                        with open(self.logfile, 'a') as f:
+                            f.write(data_share.get().decode('utf-8'))
+                    else:
+                        print (data_share.get().decode('utf-8'))
 
         elif cmd[0] == 'RETR':
             filename = cmd[1]
@@ -96,7 +100,7 @@ class FTPClient:
                 data = data_share.get().decode('utf-8')
 
                 if self.logfile:
-                    with open(self.logfile, 'w') as f:
+                    with open(self.logfile, 'a') as f:
                         f.write(data)
                 else:
                     sys.stdout.write(data)
