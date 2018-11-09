@@ -1,4 +1,4 @@
-from tcp_connection import TCP_IPv6
+from tcp_connection import TCP_IPv4
 from scapy.all import Raw
 from subprocess import check_output
 
@@ -15,7 +15,7 @@ class FTPDataConnection:
 
         self.verbose = verbose
 
-        self.tcp_connection = TCP_IPv6(src, dst, sport, dport)
+        self.tcp_connection = TCP_IPv4(src, dst, sport, dport)
         print('data connection open')
 
     def run_active(self):

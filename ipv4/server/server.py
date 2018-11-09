@@ -14,7 +14,7 @@ if __name__ ==  '__main__':
     args = arg_parser.parse_args()
 
     try:
-        ipaddr = ni.ifaddresses(args.iface[0])[ni.AF_INET6][0]['addr']
+        ipaddr = ni.ifaddresses(args.iface[0])[ni.AF_INET][0]['addr']
         ipaddr = ipaddr.split('%')[0]
     except:
         print ('Failed to fetch IP address of given interface')

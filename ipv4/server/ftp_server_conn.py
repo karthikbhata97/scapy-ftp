@@ -1,4 +1,4 @@
-from tcp_connection import TCP_IPv6
+from tcp_connection import TCP_IPv4
 from ftp_data_conn import FTPDataConnection
 from threading import Thread
 from random import randint
@@ -36,8 +36,10 @@ class FTPServerConnection:
         'open_data_conn': '150 Opening data connection.\r\n',
         'transfer_complete': '226 Transfer complete.\r\n',
         'dir_list': '150 Here comes the directory listing.\r\n',
-        'pasv_mode': '229 Entering Extended Passive Mode (|||%u|)\r\n',
-        'active_mode': '200 EPRT command successful.\r\n',
+        # 'pasv_mode': '229 Entering Extended Passive Mode (|||%u|)\r\n',
+        'pasv_mode': '227 Entering Passive Mode (%s,%u,%u).\r\n',
+
+        'active_mode': '200 PORT command successful.\r\n',
     }
 
     # initialize the fields
@@ -51,11 +53,13 @@ class FTPServerConnection:
         self.sport = sport
         self.dport = dport
 
-        self.tcp_conn = TCP_IPv6(src, dst, sport, dport, seqno, ackno)
+        self.tcp_conn = TCP_IPv4(src, dst, sport, dport, seqno, ackno)
+        print(src, dst, sport, dport)
         self.tcp_conn.listener.connection_open = True
 
         
     def run(self):
+        print('New thread')
         self.send_data(self.__resp['welcome'])
 
         data_share = self.tcp_conn.listener.data_share
@@ -145,21 +149,34 @@ class FTPServerConnection:
         self.send_data(self.__resp['type_set'] % (self.__type,))
 
 
-    def EPSV(self, cmd):
+    def PASV(self, cmd):
         self.__pasv = True
         port = randint(1024, 65535)
 
+        p_upper = (port >> 8) & 0xff
+        p_lower = port & 0xff
+        dst = ','.join(self.src.split('.'))
+
         self.data_conn = FTPDataConnection(self.src, self.dst, port, None)
 
-        self.send_data(self.__resp['pasv_mode'] % (port,))
+        self.send_data(self.__resp['pasv_mode'] % (dst, p_upper, p_lower))
 
 
-    def EPRT(self, cmd):
-        cmd = cmd.split('|')
+    def PORT(self, cmd):
 
-        dst = cmd[2]
+        cmd = cmd.split(' ')
 
-        dport = int(cmd[3])
+        ip = cmd[1].split(',')[:4]
+        ip = '.'.join(ip)
+
+        p_upper = cmd[1].split(',')[4]
+        p_lower = cmd[1].split(',')[5]
+
+        dport = (int(p_upper) << 8) + int(p_lower)
+
+        dst = ip
+
+        dport = dport
         # sport = randint(1024, 65535)
 
         self.data_conn = FTPDataConnection(self.src, dst, 20, dport)

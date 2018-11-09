@@ -32,8 +32,8 @@ class FTPServer:
         TCP handshake is completed for each SYN and new connection is created.
         """
 
-        dst = pkt[IPv6].src
-        src = pkt[IPv6].dst
+        dst = pkt[IP].src
+        src = pkt[IP].dst
 
         sport = pkt[TCP].dport
         dport = pkt[TCP].sport
@@ -41,7 +41,7 @@ class FTPServer:
         ackno = pkt[TCP].seq + 1
         seqno = 0 # use random
         
-        synack = IPv6(src=src, dst=dst)/TCP(sport=self.sport, dport=dport, flags='SA', seq=seqno, ack=ackno)
+        synack = IP(src=src, dst=dst)/TCP(sport=self.sport, dport=dport, flags='SA', seq=seqno, ack=ackno)
         
         reply = None
         while not reply:
@@ -60,7 +60,7 @@ class FTPServer:
         """
         Filter only the packets destined to the server.
         """
-        return pkt.haslayer(IPv6) and (not self.src or pkt[IPv6].dst == self.src) and \
+        return pkt.haslayer(IP) and (not self.src or pkt[IP].dst == self.src) and \
                pkt.haslayer(TCP) and pkt[TCP].dport == self.sport and \
                pkt[TCP].flags == self.tcp_flags['TCP_SYN'] 
 
