@@ -45,6 +45,7 @@ class TCP_IPv4:
         pkt[TCP].seq = self.listener.next_seq
         pkt[TCP].ack = self.listener.next_ack
 
+        print(pkt.summary())
         while self.listener.next_seq == seqno:
             sr1(pkt, timeout=1, verbose=self.verbose)
             sleep(0.5) # Not required, insted use timeout in sr1
