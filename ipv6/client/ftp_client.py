@@ -30,7 +30,8 @@ class FTPClient:
         data_share = self.passive_connection.listener.data_share
 
         if cmd[0] == 'LIST':
-            while self.passive_mode:
+            while not self.passive_connection.listener.dst_closed:
+            # while self.passive_mode:
                 if not data_share.empty():
                     if self.logfile:
                         with open(self.logfile, 'a') as f:
@@ -41,7 +42,7 @@ class FTPClient:
         elif cmd[0] == 'RETR':
             filename = cmd[1]
             with open(filename, 'w') as f:
-                while self.passive_mode:
+                while not self.passive_connection.listener.dst_closed:
                     if not data_share.empty():
                         f.write(data_share.get().decode('utf-8'))
 
