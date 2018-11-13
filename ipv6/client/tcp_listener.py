@@ -61,10 +61,17 @@ class TCP_IPv4_Listener:
 
     def manage_pkt(self, pkt):
 
+        if pkt[TCP].seq < self.next_ack:
+            with self.ack_lock:
+                if not self.ack_value:
+                    self.ack_value = (self.next_seq, self.next_ack)
+            
+            return
+        
         if pkt.haslayer(Raw):
             # print (pkt[TCP].seq, self.next_ack)
-            if pkt[TCP].seq >= self.next_ack:
-                self.data_share.put(pkt[Raw].load)
+            # if pkt[TCP].seq >= self.next_ack:
+            self.data_share.put(pkt[Raw].load)
 
         if not self.connection_open and pkt[TCP].flags == self.tcp_flags['TCP_SYN']:
             self.next_ack = pkt[TCP].seq + 1
@@ -194,6 +201,10 @@ class TCP_IPv6_Listener:
     def manage_pkt(self, pkt):
 
         if pkt[TCP].seq < self.next_ack:
+            with self.ack_lock:
+                if not self.ack_value:
+                    self.ack_value = (self.next_seq, self.next_ack)
+            
             return
 
         if pkt.haslayer(Raw):

@@ -60,7 +60,12 @@ class TCP_IPv4_Listener:
 
 
     def manage_pkt(self, pkt):
+        
         if pkt[TCP].seq < self.next_ack:
+            with self.ack_lock:
+                if not self.ack_value:
+                    self.ack_value = (self.next_seq, self.next_ack)
+        
             return
 
         if pkt.haslayer(Raw):
@@ -196,7 +201,12 @@ class TCP_IPv6_Listener:
     def manage_pkt(self, pkt):
 
         if pkt[TCP].seq < self.next_ack:
+            with self.ack_lock:
+                if not self.ack_value:
+                    self.ack_value = (self.next_seq, self.next_ack)
+        
             return
+
 
         if pkt.haslayer(Raw):
             # print (pkt[TCP].seq, self.next_ack)
