@@ -62,26 +62,38 @@ def manage_multiple(src, dst, sport, dport, user, passwd, m, cmd_file):
 
 if __name__ ==  '__main__':
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--iface', help='Interface name', nargs=1, type=str, required=True)
+    arg_parser.add_argument('--iface', help='Interface name', nargs=1, type=str)
     arg_parser.add_argument('-i', '--host', help='Destiantion IP', nargs=1, type=str, required=True)
     arg_parser.add_argument('-p', '--port', help='Destination port', nargs=1, type=int, required=True)
     arg_parser.add_argument('-u', '--user', help='Username for FTP', nargs=1, type=str, required=True)
     arg_parser.add_argument('-l', '--passwd', help='Password for the FTP', nargs=1, type=str, required=True)
     arg_parser.add_argument('-m', '--multiple', help='Multiple connection mode', nargs=1, type=int)
     arg_parser.add_argument('-c', '--cmd_file', help='Command file', nargs=1, type=str)
+    arg_parser.add_argument('-I', '--source_ip', help='Source IP address', nargs=1, type=str)
+    arg_parser.add_argument('-P', '--source_port', help='Source port', nargs=1, type=int)
 
     args = arg_parser.parse_args()
 
-    try:
-        ipaddr = ni.ifaddresses(args.iface[0])[ni.AF_INET6][0]['addr']
-        ipaddr = ipaddr.split('%')[0]
-    except:
-        print ('Failed to fetch IP address of given interface')
-        sys.exit(-1)
+    if args.iface:
+        try:
+            ipaddr = ni.ifaddresses(args.iface[0])[ni.AF_INET6][0]['addr']
+            ipaddr = ipaddr.split('%')[0]
+        except:
+            print ('Failed to fetch IP address of given interface')
+            sys.exit(-1)
+    elif args.source_ip:
+        ipaddr = args.source_ip[0]
+    else:
+        print('Specify one of Source IP or Interface')
 
+    if args.source_port:
+        portaddr = args.source_port[0]
+    else:
+        portaddr = random.randint(1024, 65535)
+     
     src = ipaddr
     dst = args.host[0]
-    sport = random.randint(1024, 65535)
+    sport = portaddr
     dport = args.port[0]
 
     username = args.user[0]
